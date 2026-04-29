@@ -30,6 +30,8 @@ public:
     ~Mmu();
 
     uint32_t createProcess();
+    std::vector<Process*> getProcesses();
+    Process* getProcess(uint32_t pid);
     void addVariableToProcess(uint32_t pid, std::string var_name, DataType type, uint32_t size, uint32_t address);
     void print();
 };

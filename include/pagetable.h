@@ -33,7 +33,11 @@ public:
     PageTable(int page_size);
     ~PageTable();
 
+    int getPageSize();
+    std::map<std::string, int> getTable();
     void addEntry(uint32_t pid, int page_number);
+    void removeEntry(uint32_t pid, int page_number);
+    void removeAll(uint32_t pid);
     int getPhysicalAddress(uint32_t pid, uint32_t virtual_address);
     void print();
 };
