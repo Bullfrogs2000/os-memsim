@@ -43,7 +43,188 @@ int main(int argc, char **argv)
     while (command != "exit")
     {
         // Handle command
-        // TODO: implement this!
+        // commands to implement: create, allocate, set, free, terminate, print
+
+        std::istringstream iss(command_line);
+        std::string command;
+        iss >> command;
+        //the create command
+        if (command == "create") {
+            uint32_t text_size, data_size;
+            if (iss >> text_size >> data_size) {
+                createProcess(text_size, data_size, mmu, page_table);
+            }
+        } 
+        //the allocate command
+        else if (command == "allocate") {
+            uint32_t pid, num_elements;
+            std::string var_name, type_str;
+            if (iss >> pid >> var_name >> type_str >> num_elements) 
+            {
+                try {
+                    DataType type = stringToDataType(type_str);
+                    allocateVariable(pid, var_name, type, num_elements, mmu, page_table, page_size);
+                } 
+                catch (...) 
+                {
+                    std::cout << "error: invalid data type" << std:: endl;
+                }
+            }
+        } 
+        //the set command
+        else if (command == "set") {
+            uint32_t pid, offset;
+            std::string var_name;
+            if (iss >> pid >> var_name >> offset) {
+                std::string val_str;
+                int current_offset = offset;
+                while (iss >> val_str) {
+                    // Extract values and cast based on type
+                    if (target_var->type == DataType::Int) {
+                        int val = std::stoi(val_str);
+                        setVariable(pid, var_name, current_offset, &val, mmu, page_table, memory);
+                    } else if (target_var->type == DataType::Double) {
+                        double val = std::stod(val_str);
+                        setVariable(pid, var_name, current_offset, &val, mmu, page_table, memory);
+                    } else if (target_var->type == DataType::Char) {
+                        char val = val_str[0];
+                        setVariable(pid, var_name, current_offset, &val, mmu, page_table, memory);
+                    } else if (target_var->type == DataType::Long) {
+                        long val = std::stoll(val_str);
+                        setVariable(pid, var_name, current_offset, &val, mmu, page_table, memory);
+                    }
+                    current_offset++;
+                }
+            }
+        } 
+        //the free command
+        else if (command == "free") 
+        {
+            uint32_t pid; std::string var_name;
+            if (iss >> pid >> var_name) {
+                freeVariable(pid, var_name, mmu, page_table);
+            }
+        } 
+        //the terminate command
+        else if (command == "terminate") {
+            uint32_t pid;
+            if (iss >> pid) terminateProcess(pid, mmu, page_table);
+        } 
+        //the print command
+        else if (command == "print") 
+        {
+            std::string obj;
+            if (iss >> obj) {
+                if (obj == "mmu") mmu->print();
+                else if (obj == "page") page_table->print();
+                else if (obj == "processes") 
+                {
+                    for (auto* p : mmu->getProcesses()) std::cout << p->pid << std:: endl;
+                } 
+                else 
+                {
+                    // Handle variable printing: <PID>:<var_name>
+                    size_t colon = obj.find(':');
+                    if (colon != std::string::npos) 
+                    {
+                        uint32_t pid = std::stoi(obj.substr(0, colon));
+                        std::string vname = obj.substr(colon + 1);
+                        
+                        Process* p = mmu->getProcess(pid);
+                        if (p) 
+                        {
+                            Variable* target = nullptr;
+                            for (auto* v : p->variables) 
+                            {
+                                if (v->name == vname) 
+                                {
+                                    target = v;
+                                    break;
+                                }
+                            }
+                            
+                            if (target) 
+                            {
+                                uint32_t element_size = getDataTypeSize(target->type);
+                                uint32_t num_elements = target->size / element_size;
+                                uint32_t print_limit = std::min((uint32_t)4, num_elements);
+
+                                for (uint32_t i = 0; i < print_limit; i++) 
+                                {
+                                    if (i > 0) std::cout << ", ";
+
+                                    // Calculate virtual address for this specific element
+                                    uint32_t v_addr = target->virtual_address + (i * element_size);
+                                    
+                                    // Look up physical address in RAM
+                                    int p_addr = page_table->getPhysicalAddress(pid, v_addr);
+                                    
+                                    if (p_addr != -1) 
+                                    {
+                                        // Extract bytes from physical memory and cast to correct type
+                                        if (target->type == DataType::Char) 
+                                        {
+                                            char val;
+                                            std::memcpy(&val, &memory[p_addr], sizeof(char));
+                                            std::cout << val;
+                                        } 
+                                        else if (target->type == DataType::Short) 
+                                        {
+                                            short val;
+                                            std::memcpy(&val, &memory[p_addr], sizeof(short));
+                                            std::cout << val;
+                                        } 
+                                        else if (target->type == DataType::Int) 
+                                        {
+                                            int val;
+                                            std::memcpy(&val, &memory[p_addr], sizeof(int));
+                                            std::cout << val;
+                                        } 
+                                        else if (target->type == DataType::Float) 
+                                        {
+                                            float val;
+                                            std::memcpy(&val, &memory[p_addr], sizeof(float));
+                                            std::cout << val;
+                                        } 
+                                        else if (target->type == DataType::Long) 
+                                        {
+                                            long val;
+                                            std::memcpy(&val, &memory[p_addr], sizeof(long));
+                                            std::cout << val;
+                                        } 
+                                        else if (target->type == DataType::Double) 
+                                        {
+                                            double val;
+                                            std::memcpy(&val, &memory[p_addr], sizeof(double));
+                                            std::cout << val;
+                                        }
+                                    }
+                                }
+
+                                // Append the suffix if there are more than 4 items
+                                if (num_elements > 4) 
+                                {
+                                    std::cout << ", ... [" << num_elements << " items]";
+                                }
+                                std::cout << std:: endl;
+                            } 
+                            else 
+                            {
+                                std::cout << "error: variable not found" << std:: endl;
+                            }
+                        } 
+                        else 
+                        {
+                            std::cout << "error: process not found" << std:: endl;
+                        }
+                    }
+                }
+            }
+        } 
+        else 
+        {
+            std::cout << "error: command not recognized" << std:: endl;
+        }
 
         // Get next command
         std::cout << "> ";
